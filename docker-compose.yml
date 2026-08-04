@@ -7,8 +7,7 @@ services:
       dockerfile: Dockerfile.backend
     container_name: gistex-translator-backend
     restart: always
-    ports:
-      - "8001:8001"
+    network_mode: "host"
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - LD_LIBRARY_PATH=/opt/conda/lib/python3.10/site-packages/nvidia/cublas/lib:/opt/conda/lib/python3.10/site-packages/nvidia/cudnn/lib
@@ -29,8 +28,7 @@ services:
       dockerfile: Dockerfile.frontend
     container_name: gistex-translator-frontend
     restart: always
-    ports:
-      - "5173:80"
+    network_mode: "host"
     depends_on:
       - backend
 
