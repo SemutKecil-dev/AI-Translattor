@@ -161,13 +161,13 @@ function App() {
     return () => stopStreaming()
   }, [])
 
-  // Auto-scroll ke paling bawah
+  // Auto-scroll hanya pada kontainer spesifik agar menu/header tidak ikut tergulung
   const scrollToBottom = () => {
-    if (bottomAnchorRef.current) {
-      bottomAnchorRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    if (gridScrollRef.current) {
+      gridScrollRef.current.scrollTop = gridScrollRef.current.scrollHeight;
     }
-    if (presenterAnchorRef.current) {
-      presenterAnchorRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    if (presenterAnchorRef.current && presenterAnchorRef.current.parentElement) {
+      presenterAnchorRef.current.parentElement.scrollTop = presenterAnchorRef.current.parentElement.scrollHeight;
     }
   }
 
