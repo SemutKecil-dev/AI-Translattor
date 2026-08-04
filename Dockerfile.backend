@@ -2,8 +2,10 @@ FROM pytorch/pytorch:2.2.1-cuda12.1-cudnn8-runtime
 
 WORKDIR /app
 
-# Install system dependencies (FFmpeg, git, curl)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Switch to fast Linux Kernel mirror to avoid archive.ubuntu.com timeouts
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|https://mirrors.edge.kernel.org/ubuntu/|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.ubuntu.com/ubuntu/|https://mirrors.edge.kernel.org/ubuntu/|g' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     git \
     curl \
