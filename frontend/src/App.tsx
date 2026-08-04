@@ -213,6 +213,18 @@ function App() {
     return () => clearInterval(interval);
   }, [isStreaming]);
 
+  // Send config updates dynamically if changed during streaming
+  useEffect(() => {
+    if (isStreaming && isConnected && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        enable_tts: isTtsEnabled,
+        tts_voice: ttsVoice,
+        source_lang: sourceLang,
+        target_lang: targetLang
+      }))
+    }
+  }, [isTtsEnabled, ttsVoice, sourceLang, targetLang, isStreaming, isConnected])
+
   // Callback ketika animasi ketikan kalimat tertentu selesai
   const handleTypingComplete = (id: string) => {
     setSentences(prev => prev.map(s => s.id === id ? { ...s, isLatest: false } : s))

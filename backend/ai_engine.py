@@ -100,9 +100,9 @@ class TranslatorPipeline:
         logger.info("Loading STT (faster-whisper large-v3 model)...")
         self.stt_model = WhisperModel("large-v3", device=self.device, compute_type=self.compute_type)
         
-        # 2. Load NMT Model (NLLB-200-1.3B)
-        logger.info("Loading NMT (NLLB-200-1.3B)...")
-        model_name = "facebook/nllb-200-1.3B"
+        # 2. Load NMT Model (NLLB-200-3.3B)
+        logger.info("Loading NMT (NLLB-200-3.3B)...")
+        model_name = "facebook/nllb-200-3.3B"
         self.nmt_tokenizer = AutoTokenizer.from_pretrained(
             model_name, 
             src_lang="eng_Latn", 
