@@ -105,8 +105,11 @@ function App() {
   const [isConnected, setIsConnected] = useState(false)
   
   // TTS Settings
-  const [isTtsEnabled, setIsTtsEnabled] = useState<boolean>(false)
-  const [ttsVoice, setTtsVoice] = useState<string>('id-ID-GadisNeural')
+  const [isTtsEnabled, setIsTtsEnabled] = useState<boolean>(true)
+  const [ttsVoice, setTtsVoice] = useState<string>('id-ID-ArdiNeural')
+  
+  const [sourceLang, setSourceLang] = useState<string>('en')
+  const [targetLang, setTargetLang] = useState<string>('id')
   
   // Modals
   const [showGlossaryModal, setShowGlossaryModal] = useState<boolean>(false)
@@ -229,7 +232,9 @@ function App() {
         if (wsRef.current) {
           wsRef.current.send(JSON.stringify({
             enable_tts: isTtsEnabled,
-            tts_voice: ttsVoice
+            tts_voice: ttsVoice,
+            source_lang: sourceLang,
+            target_lang: targetLang
           }))
         }
         
@@ -284,8 +289,17 @@ function App() {
               stopStreaming();
             };
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error("Gagal membuka audio stream:", err);
+          
+          if (err.name === 'NotAllowedError' || err.message?.includes('Permission denied')) {
+            showToast("Izin mikrofon ditolak. Pastikan Anda memberi izin akses mikrofon.");
+          } else if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            showToast("Browser memblokir mikrofon. Anda harus mengakses web ini menggunakan HTTPS (atau localhost).");
+          } else {
+            showToast(`Gagal membuka stream: ${err.message || 'Unknown error'}`);
+          }
+          
           setIsStreaming(false)
           setIsConnected(false)
         }
@@ -296,18 +310,41 @@ function App() {
         if (response.status === "processed") {
           if (response.source_text || response.translated_text) {
             const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-            const newBlock: SentenceBlock = {
-              id: Math.random().toString(36).substring(2, 9),
-              speaker: response.speaker || "Speaker 1",
-              source: response.source_text || "",
-              translation: response.translated_text || "",
-              timestamp: timeStr,
-              isLatest: true
-            }
-
+            
             setSentences(prev => {
-              const updated = prev.map(s => ({ ...s, isLatest: false }))
-              return [...updated, newBlock]
+              const last = prev[prev.length - 1];
+              if (last && !last.isLatest) {
+                // if the previous block is already not latest, we just append
+                const updated = prev.map(s => ({ ...s, isLatest: false }));
+                return [...updated, {
+                  id: Math.random().toString(36).substring(2, 9),
+                  speaker: response.speaker || "Speaker 1",
+                  source: response.source_text || "",
+                  translation: response.translated_text || "",
+                  timestamp: timeStr,
+                  isLatest: response.is_final === false
+                }];
+              } else if (last && last.isLatest) {
+                // Update the current interim block
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...last,
+                  source: response.source_text || "",
+                  translation: response.translated_text || "",
+                  isLatest: response.is_final === false
+                };
+                return updated;
+              } else {
+                // First block
+                return [{
+                  id: Math.random().toString(36).substring(2, 9),
+                  speaker: response.speaker || "Speaker 1",
+                  source: response.source_text || "",
+                  translation: response.translated_text || "",
+                  timestamp: timeStr,
+                  isLatest: response.is_final === false
+                }];
+              }
             })
 
             if (isTtsEnabled && response.audio_b64) {
@@ -735,8 +772,43 @@ function App() {
                 <option value="en-US-AvaNeural">👩 Ava (Humanoid Expressive - EN)</option>
                 <option value="en-US-AndrewNeural">👨 Andrew (Humanoid Expressive - EN)</option>
                 <option value="en-US-BrianNeural">🎙️ Brian (Penyiar Podcast - EN)</option>
+                <option value="ja-JP-NanamiNeural">👩 Nanami (Jepang - JP)</option>
               </select>
             )}
+          </div>
+          
+          {/* Language Selection */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-subtle)', padding: '0.25rem 0.6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Input:</span>
+            <select 
+              className="ep-select"
+              style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
+              value={sourceLang}
+              onChange={(e) => setSourceLang(e.target.value)}
+              disabled={isStreaming}
+            >
+              <option value="en">🇺🇸 Inggris (EN)</option>
+              <option value="id">🇮🇩 Indonesia (ID)</option>
+              <option value="ja">🇯🇵 Jepang (JA)</option>
+              <option value="ko">🇰🇷 Korea (KO)</option>
+              <option value="zh">🇨🇳 Mandarin (ZH)</option>
+              <option value="es">🇪🇸 Spanyol (ES)</option>
+            </select>
+            
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Output:</span>
+            <select 
+              className="ep-select"
+              style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}
+              value={targetLang}
+              onChange={(e) => setTargetLang(e.target.value)}
+              disabled={isStreaming}
+            >
+              <option value="id">🇮🇩 Indonesia (ID)</option>
+              <option value="en">🇺🇸 Inggris (EN)</option>
+              <option value="ja">🇯🇵 Jepang (JA)</option>
+              <option value="ko">🇰🇷 Korea (KO)</option>
+              <option value="zh">🇨🇳 Mandarin (ZH)</option>
+            </select>
           </div>
         </div>
 
@@ -765,7 +837,7 @@ function App() {
         {/* Header Row */}
         <div className="ep-grid-header">
           <div className="ep-grid-header-cell">
-            <span>🇺🇸 English Source Transcript</span>
+            <span>🎤 Source Transcript</span>
             <div className="ep-grid-tools">
               <input 
                 type="text" 
@@ -775,7 +847,7 @@ function App() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
               <button className="ep-icon-btn" onClick={() => handleCopy('source')}>
-                📋 Salin EN
+                📋 Salin
               </button>
             </div>
           </div>

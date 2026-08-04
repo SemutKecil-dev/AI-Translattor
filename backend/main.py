@@ -155,14 +155,17 @@ async def websocket_stream_endpoint(websocket: WebSocket):
     SAMPLE_RATE = 16000
     BYTES_PER_SAMPLE = 4
     
-    MIN_WINDOW_SEC = 3.0
-    MAX_WINDOW_SEC = 6.0
+    MIN_WINDOW_SEC = 1.0
+    MAX_WINDOW_SEC = 10.0
     
     min_bytes_needed = int(SAMPLE_RATE * BYTES_PER_SAMPLE * MIN_WINDOW_SEC)
     max_bytes_needed = int(SAMPLE_RATE * BYTES_PER_SAMPLE * MAX_WINDOW_SEC)
     
     enable_tts = False
     tts_voice = "id-ID-ArdiNeural"
+    source_lang = "en"
+    target_lang = "id"
+    last_processed_bytes = 0
     
     try:
         while True:
@@ -176,6 +179,10 @@ async def websocket_stream_endpoint(websocket: WebSocket):
                         enable_tts = bool(cfg["enable_tts"])
                     if "tts_voice" in cfg:
                         tts_voice = str(cfg["tts_voice"])
+                    if "source_lang" in cfg:
+                        source_lang = str(cfg["source_lang"])
+                    if "target_lang" in cfg:
+                        target_lang = str(cfg["target_lang"])
                 except Exception:
                     pass
                 continue
@@ -185,7 +192,8 @@ async def websocket_stream_endpoint(websocket: WebSocket):
                 pcm_buffer.extend(chunk)
                 AUDIO_CHUNKS_PROCESSED.inc()
                 
-                if len(pcm_buffer) >= min_bytes_needed:
+                # Check for interim or final processing
+                if len(pcm_buffer) - last_processed_bytes >= min_bytes_needed:
                     audio_array = np.frombuffer(bytes(pcm_buffer), dtype=np.float32)
                     
                     recent_samples = audio_array[-int(SAMPLE_RATE * 0.4):]
@@ -195,10 +203,12 @@ async def websocket_stream_endpoint(websocket: WebSocket):
                     is_max_length = len(pcm_buffer) >= max_bytes_needed
                     
                     if is_silence or is_max_length:
+                        # FINAL PASS (Translation + TTS + Diarization)
                         audio_to_process = audio_array.copy()
                         pcm_buffer.clear()
+                        last_processed_bytes = 0
                         
-                        result = translator.process_pipeline(audio_to_process)
+                        result = translator.process_pipeline(audio_to_process, source_lang, target_lang)
                         
                         if result["source_text"] or result["translated_text"]:
                             audio_b64 = None
@@ -212,7 +222,23 @@ async def websocket_stream_endpoint(websocket: WebSocket):
                                 "speaker": result.get("speaker", "Speaker 1"),
                                 "source_text": result["source_text"],
                                 "translated_text": result["translated_text"],
-                                "audio_b64": audio_b64
+                                "audio_b64": audio_b64,
+                                "is_final": True
+                            })
+                    else:
+                        # INTERIM PASS (STT Only, Fast)
+                        last_processed_bytes = len(pcm_buffer)
+                        audio_to_process = audio_array.copy()
+                        
+                        source_text = translator.transcribe(audio_to_process, source_lang=source_lang)
+                        if source_text:
+                            await websocket.send_json({
+                                "status": "processed",
+                                "speaker": "Speaker 1",
+                                "source_text": source_text,
+                                "translated_text": "",
+                                "audio_b64": None,
+                                "is_final": False
                             })
     except WebSocketDisconnect:
         logger.info(f"Client disconnected from input streaming: {websocket.client.host}")

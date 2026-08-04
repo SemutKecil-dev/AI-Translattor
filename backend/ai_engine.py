@@ -127,13 +127,13 @@ class TranslatorPipeline:
             return f"{base_prompt} Custom terms: {custom_terms}"
         return base_prompt
 
-    def transcribe(self, audio_array: np.ndarray) -> str:
+    def transcribe(self, audio_array: np.ndarray, source_lang: str = "en") -> str:
         domain_prompt = self.get_domain_prompt()
         logger.debug(f"Transcribing audio chunk with prompt: {domain_prompt[:60]}...")
         segments, _ = self.stt_model.transcribe(
             audio_array, 
             beam_size=1, 
-            language="en",
+            language=source_lang,
             initial_prompt=domain_prompt,
             vad_filter=True,
             condition_on_previous_text=False
@@ -141,16 +141,19 @@ class TranslatorPipeline:
         text = " ".join([segment.text for segment in segments])
         return text.strip()
 
-    def translate(self, text: str) -> str:
+    def translate(self, text: str, source_lang_nllb: str = "eng_Latn", target_lang_nllb: str = "ind_Latn") -> str:
         if not text:
             return ""
         
-        logger.debug(f"Translating text: {text}")
+        logger.debug(f"Translating text: {text} from {source_lang_nllb} to {target_lang_nllb}")
+        
+        # Override source lang if not English (default is eng_Latn)
+        self.nmt_tokenizer.src_lang = source_lang_nllb
         inputs = self.nmt_tokenizer(text, return_tensors="pt").to(self.device)
         
         translated_tokens = self.nmt_model.generate(
             **inputs, 
-            forced_bos_token_id=self.nmt_tokenizer.convert_tokens_to_ids("ind_Latn"),
+            forced_bos_token_id=self.nmt_tokenizer.convert_tokens_to_ids(target_lang_nllb),
             num_beams=1,
             max_length=150
         )
@@ -203,15 +206,33 @@ class TranslatorPipeline:
                 logger.error(f"Fallback TTS failed: {ex}")
                 return b""
 
-    def process_pipeline(self, audio_array: np.ndarray) -> dict:
-        english_text = self.transcribe(audio_array)
-        speaker = self.diarizer.identify_speaker(audio_array) if english_text else "Speaker 1"
-        indonesian_text = self.translate(english_text) if english_text else ""
+    def process_pipeline(self, audio_array: np.ndarray, source_lang: str = "en", target_lang: str = "id") -> dict:
+        # Mapping languages
+        nllb_map = {
+            "en": "eng_Latn",
+            "id": "ind_Latn",
+            "ja": "jpn_Jpan",
+            "ko": "kor_Hang",
+            "zh": "zho_Hans",
+            "es": "spa_Latn",
+            "fr": "fra_Latn"
+        }
         
-        logger.info(f"[PIPELINE RESULT] [{speaker}] STT (EN): '{english_text}' -> NMT (ID): '{indonesian_text}'")
+        source_lang_nllb = nllb_map.get(source_lang, "eng_Latn")
+        target_lang_nllb = nllb_map.get(target_lang, "ind_Latn")
+        
+        source_text = self.transcribe(audio_array, source_lang=source_lang)
+        speaker = self.diarizer.identify_speaker(audio_array) if source_text else "Speaker 1"
+        
+        if source_lang == target_lang:
+            translated_text = source_text
+        else:
+            translated_text = self.translate(source_text, source_lang_nllb, target_lang_nllb) if source_text else ""
+        
+        logger.info(f"[PIPELINE RESULT] [{speaker}] STT ({source_lang}): '{source_text}' -> NMT ({target_lang}): '{translated_text}'")
         
         return {
             "speaker": speaker,
-            "source_text": english_text,
-            "translated_text": indonesian_text,
+            "source_text": source_text,
+            "translated_text": translated_text,
         }
