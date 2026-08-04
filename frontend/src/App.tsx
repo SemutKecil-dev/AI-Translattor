@@ -7,6 +7,7 @@ interface SentenceBlock {
   translation: string
   timestamp: string
   isLatest?: boolean
+  isInterim?: boolean
 }
 
 interface GlossaryItem {
@@ -313,8 +314,19 @@ function App() {
             
             setSentences(prev => {
               const last = prev[prev.length - 1];
-              if (last && !last.isLatest) {
-                // if the previous block is already not latest, we just append
+              if (last && last.isInterim) {
+                // Update the current interim block
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...last,
+                  source: response.source_text || "",
+                  translation: response.translated_text || "",
+                  isLatest: response.is_final === true, // Only latest (animate) when it's final
+                  isInterim: response.is_final === false
+                };
+                return updated;
+              } else {
+                // First block or append after previous final block
                 const updated = prev.map(s => ({ ...s, isLatest: false }));
                 return [...updated, {
                   id: Math.random().toString(36).substring(2, 9),
@@ -322,27 +334,8 @@ function App() {
                   source: response.source_text || "",
                   translation: response.translated_text || "",
                   timestamp: timeStr,
-                  isLatest: response.is_final === false
-                }];
-              } else if (last && last.isLatest) {
-                // Update the current interim block
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  ...last,
-                  source: response.source_text || "",
-                  translation: response.translated_text || "",
-                  isLatest: response.is_final === false
-                };
-                return updated;
-              } else {
-                // First block
-                return [{
-                  id: Math.random().toString(36).substring(2, 9),
-                  speaker: response.speaker || "Speaker 1",
-                  source: response.source_text || "",
-                  translation: response.translated_text || "",
-                  timestamp: timeStr,
-                  isLatest: response.is_final === false
+                  isLatest: response.is_final === true, // Only latest (animate) when it's final
+                  isInterim: response.is_final === false
                 }];
               }
             })
@@ -872,26 +865,26 @@ function App() {
         <div className="ep-grid-scroll-area" ref={gridScrollRef}>
           {filteredSentences.length > 0 ? (
             filteredSentences.map(s => (
-              <div key={s.id} className={`ep-grid-row ${s.isLatest ? 'is-latest' : ''}`}>
-                {/* Left Cell: English Source */}
+              <div key={s.id} className={`ep-grid-row ${s.isLatest || s.isInterim ? 'is-latest' : ''}`}>
+                {/* Left Cell: Source Transcript */}
                 <div className="ep-cell ep-cell-source">
                   <span className={`ep-speaker-badge ${getSpeakerClass(s.speaker)}`}>
                     👤 {s.speaker}
                   </span>
                   <span className="ep-timestamp-inline">{s.timestamp}</span>
-                  {s.isLatest ? (
-                    <TypewriterText text={s.source} speed={15} onType={scrollToBottom} onComplete={() => handleTypingComplete(s.id)} />
-                  ) : (
-                    <span>{s.source}</span>
-                  )}
+                  {/* For source text, we never use Typewriter to avoid flickering on interim updates */}
+                  <span style={{ opacity: s.isInterim ? 0.7 : 1 }}>
+                    {s.source} {s.isInterim && <span className="typewriter-cursor">|</span>}
+                  </span>
                 </div>
 
-                {/* Right Cell: Indonesian Translation */}
+                {/* Right Cell: Translation */}
                 <div className="ep-cell ep-cell-target">
                   <span className={`ep-speaker-badge ${getSpeakerClass(s.speaker)}`}>
                     👤 {s.speaker}
                   </span>
-                  {s.isLatest ? (
+                  {s.isLatest && s.translation ? (
+                    /* Typewriter effect ONLY for final translation */
                     <TypewriterText text={s.translation} speed={15} onType={scrollToBottom} onComplete={() => handleTypingComplete(s.id)} />
                   ) : (
                     <span>{s.translation}</span>
