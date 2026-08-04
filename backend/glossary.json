@@ -1,0 +1,42 @@
+[
+  {
+    "term": "Kubernetes",
+    "translation": "Kubernetes (K8s)"
+  },
+  {
+    "term": "S3 bucket",
+    "translation": "S3 Bucket"
+  },
+  {
+    "term": "Jacquard",
+    "translation": "Mesin Jacquard"
+  },
+  {
+    "term": "Warp",
+    "translation": "Benang Lusi (Warp)"
+  },
+  {
+    "term": "Weft",
+    "translation": "Benang Pakan (Weft)"
+  },
+  {
+    "term": "GSM",
+    "translation": "Gramasi Kain (GSM)"
+  },
+  {
+    "term": "VLAN",
+    "translation": "VLAN (Virtual LAN)"
+  },
+  {
+    "term": "Mercerization",
+    "translation": "Merserisasi Kain"
+  },
+  {
+    "term": "Denier",
+    "translation": "Denier (Ukuran Serat)"
+  },
+  {
+    "term": "Cloud",
+    "translation": "Cloud"
+  }
+]
