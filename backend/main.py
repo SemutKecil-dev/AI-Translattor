@@ -4,9 +4,10 @@ import io
 import numpy as np
 from pydub import AudioSegment
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from ai_engine import TranslatorPipeline
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
 from prometheus_client import make_asgi_app, Counter, Histogram
+from ai_engine import TranslatorPipeline
 
 # Konfigurasi Logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -208,7 +209,7 @@ async def websocket_stream_endpoint(websocket: WebSocket):
                         pcm_buffer.clear()
                         last_processed_bytes = 0
                         
-                        result = translator.process_pipeline(audio_to_process, source_lang, target_lang)
+                        result = await run_in_threadpool(translator.process_pipeline, audio_to_process, source_lang, target_lang)
                         
                         if result["source_text"] or result["translated_text"]:
                             audio_b64 = None
@@ -230,7 +231,7 @@ async def websocket_stream_endpoint(websocket: WebSocket):
                         last_processed_bytes = len(pcm_buffer)
                         audio_to_process = audio_array.copy()
                         
-                        source_text = translator.transcribe(audio_to_process, source_lang=source_lang)
+                        source_text = await run_in_threadpool(translator.transcribe, audio_to_process, source_lang)
                         if source_text:
                             await websocket.send_json({
                                 "status": "processed",
