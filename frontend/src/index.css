@@ -50,22 +50,25 @@
 body {
   background-color: var(--bg-app);
   color: var(--text-main);
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   padding: 0;
 }
 
 #root {
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* Enterprise Layout Container */
 .enterprise-container {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: var(--bg-app);
 }
 

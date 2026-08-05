@@ -161,16 +161,15 @@ function App() {
     return () => stopStreaming()
   }, [])
 
-  // Auto-scroll hanya pada kontainer spesifik agar menu/header tidak ikut tergulung
   const scrollToBottom = useCallback(() => {
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       if (gridScrollRef.current) {
         gridScrollRef.current.scrollTop = gridScrollRef.current.scrollHeight;
       }
       if (presenterAnchorRef.current && presenterAnchorRef.current.parentElement) {
         presenterAnchorRef.current.parentElement.scrollTop = presenterAnchorRef.current.parentElement.scrollHeight;
       }
-    });
+    }, 50);
   }, []);
 
   useEffect(() => {
