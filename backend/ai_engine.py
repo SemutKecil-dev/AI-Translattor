@@ -57,9 +57,12 @@ class SpeakerDiarizer:
             return "Speaker 1"
             
         try:
-            signal = torch.tensor(audio_array).unsqueeze(0).to(self.device)
-            embeddings = self.classifier.encode_batch(signal)
-            emb = embeddings.squeeze().cpu()
+            with torch.no_grad():
+                signal = torch.tensor(audio_array).unsqueeze(0).to(self.device)
+                embeddings = self.classifier.encode_batch(signal)
+                emb = embeddings.squeeze().cpu()
+                del signal
+                del embeddings
             
             best_sim = -1.0
             best_idx = -1
@@ -156,15 +159,24 @@ class TranslatorPipeline:
         
         # Override source lang if not English (default is eng_Latn)
         self.nmt_tokenizer.src_lang = source_lang_nllb
-        inputs = self.nmt_tokenizer(text, return_tensors="pt").to(self.device)
         
-        translated_tokens = self.nmt_model.generate(
-            **inputs, 
-            forced_bos_token_id=self.nmt_tokenizer.convert_tokens_to_ids(target_lang_nllb),
-            num_beams=1,
-            max_length=150
-        )
-        translated_text = self.nmt_tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)[0]
+        with torch.no_grad():
+            inputs = self.nmt_tokenizer(text, return_tensors="pt").to(self.device)
+            
+            translated_tokens = self.nmt_model.generate(
+                **inputs, 
+                forced_bos_token_id=self.nmt_tokenizer.convert_tokens_to_ids(target_lang_nllb),
+                num_beams=1,
+                max_length=150
+            )
+            translated_text = self.nmt_tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)[0]
+            
+            del inputs
+            del translated_tokens
+            
+            # Optionally empty cache periodically if memory is a concern
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
         
         # Apply glossary post-processing replacement
         glossary = load_glossary()
