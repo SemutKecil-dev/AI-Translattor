@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
 interface SentenceBlock {
   id: string
@@ -162,14 +162,16 @@ function App() {
   }, [])
 
   // Auto-scroll hanya pada kontainer spesifik agar menu/header tidak ikut tergulung
-  const scrollToBottom = () => {
-    if (gridScrollRef.current) {
-      gridScrollRef.current.scrollTop = gridScrollRef.current.scrollHeight;
-    }
-    if (presenterAnchorRef.current && presenterAnchorRef.current.parentElement) {
-      presenterAnchorRef.current.parentElement.scrollTop = presenterAnchorRef.current.parentElement.scrollHeight;
-    }
-  }
+  const scrollToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (gridScrollRef.current) {
+        gridScrollRef.current.scrollTop = gridScrollRef.current.scrollHeight;
+      }
+      if (presenterAnchorRef.current && presenterAnchorRef.current.parentElement) {
+        presenterAnchorRef.current.parentElement.scrollTop = presenterAnchorRef.current.parentElement.scrollHeight;
+      }
+    });
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
