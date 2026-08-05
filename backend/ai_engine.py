@@ -142,7 +142,7 @@ class TranslatorPipeline:
         logger.debug(f"Transcribing audio chunk with prompt: {domain_prompt[:60]}...")
         segments, _ = self.stt_model.transcribe(
             audio_array, 
-            beam_size=1, 
+            beam_size=5, 
             language=source_lang,
             initial_prompt=domain_prompt,
             vad_filter=True,
@@ -166,7 +166,7 @@ class TranslatorPipeline:
             translated_tokens = self.nmt_model.generate(
                 **inputs, 
                 forced_bos_token_id=self.nmt_tokenizer.convert_tokens_to_ids(target_lang_nllb),
-                num_beams=1,
+                num_beams=4,
                 max_length=150
             )
             translated_text = self.nmt_tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)[0]
