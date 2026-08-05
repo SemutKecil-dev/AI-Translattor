@@ -34,7 +34,13 @@ class SpeakerDiarizer:
         logger.info(f"Loading Speaker Diarization Model (SpeechBrain ECAPA) on {self.device}...")
         run_opts = {"device": "cuda:0"} if self.device == "cuda" else {"device": "cpu"}
         try:
-            from speechbrain.inference.speaker import EncoderClassifier
+            try:
+                # SpeechBrain < 1.0
+                from speechbrain.pretrained import EncoderClassifier
+            except ImportError:
+                # SpeechBrain >= 1.0
+                from speechbrain.inference.speaker import EncoderClassifier
+            
             self.classifier = EncoderClassifier.from_hparams(
                 source="speechbrain/spkrec-ecapa-voxceleb",
                 run_opts=run_opts
@@ -66,6 +72,7 @@ class SpeakerDiarizer:
                     best_idx = idx
                     best_speaker = spk_label
                     
+            logger.info(f"[DIARIZATION] best_sim={best_sim:.3f} against {best_speaker}")
             # Threshold 0.45: standar akustik optimal untuk SpeechBrain ECAPA
             if best_sim >= 0.45 and best_speaker:
                 # Update centroid secara adaptif (Exponential Moving Average)
