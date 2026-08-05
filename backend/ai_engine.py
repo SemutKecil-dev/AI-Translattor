@@ -110,18 +110,18 @@ class TranslatorPipeline:
         logger.info("Loading STT (faster-whisper large-v3 model)...")
         self.stt_model = WhisperModel("large-v3", device=self.device, compute_type=self.compute_type)
         
-        # 2. Load NMT Model (NLLB-200-3.3B)
-        logger.info("Loading NMT (NLLB-200-3.3B)...")
-        model_name = "facebook/nllb-200-3.3B"
-        self.nmt_tokenizer = AutoTokenizer.from_pretrained(
-            model_name, 
-            src_lang="eng_Latn", 
-            tgt_lang="ind_Latn"
-        )
-        self.nmt_model = AutoModelForSeq2SeqLM.from_pretrained(
-            model_name, 
-            torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
-        ).to(self.device)
+        # 2. Load NMT Model (NLLB-200-3.3B) - Di-disable untuk menggunakan Ollama
+        logger.info("NMT Model: Switched to Ollama (Qwen 2.5)...")
+        # model_name = "facebook/nllb-200-3.3B"
+        # self.nmt_tokenizer = AutoTokenizer.from_pretrained(
+        #     model_name, 
+        #     src_lang="eng_Latn", 
+        #     tgt_lang="ind_Latn"
+        # )
+        # self.nmt_model = AutoModelForSeq2SeqLM.from_pretrained(
+        #     model_name, 
+        #     torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
+        # ).to(self.device)
         
         # 3. Load Speaker Diarizer
         self.diarizer = SpeakerDiarizer(device=self.device)
@@ -155,40 +155,45 @@ class TranslatorPipeline:
         if not text:
             return ""
         
-        logger.debug(f"Translating text: {text} from {source_lang_nllb} to {target_lang_nllb}")
+        logger.debug(f"Translating text via Ollama: {text}")
         
-        # Override source lang if not English (default is eng_Latn)
-        self.nmt_tokenizer.src_lang = source_lang_nllb
-        
-        with torch.no_grad():
-            inputs = self.nmt_tokenizer(text, return_tensors="pt").to(self.device)
-            
-            translated_tokens = self.nmt_model.generate(
-                **inputs, 
-                forced_bos_token_id=self.nmt_tokenizer.convert_tokens_to_ids(target_lang_nllb),
-                num_beams=4,
-                max_length=150
-            )
-            translated_text = self.nmt_tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)[0]
-            
-            del inputs
-            del translated_tokens
-            
-            # Optionally empty cache periodically if memory is a concern
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        
-        # Apply glossary post-processing replacement
+        # Build glossary prompt for LLM
         glossary = load_glossary()
-        for item in glossary:
-            term = item.get("term", "")
-            replacement = item.get("translation", "")
-            if term and replacement and term.lower() in translated_text.lower():
-                # Case-insensitive replacement
-                import re
-                translated_text = re.sub(re.escape(term), replacement, translated_text, flags=re.IGNORECASE)
-                
-        return translated_text
+        glossary_prompt = ""
+        if glossary:
+            terms = [f"- '{item.get('term', '')}' diterjemahkan menjadi '{item.get('translation', '')}'" 
+                     for item in glossary if item.get('term')]
+            if terms:
+                glossary_prompt = "PENTING! Gunakan kamus istilah teknis berikut secara persis:\n" + "\n".join(terms) + "\n\n"
+        
+        prompt = f"""Anda adalah penerjemah profesional khusus untuk industri Manufaktur Pabrik Tekstil dan IT.
+Terjemahkan teks bahasa Inggris berikut ke bahasa Indonesia.
+{glossary_prompt}
+Teks Asli: {text}
+
+ATURAN: Berikan HANYA hasil terjemahannya saja, tanpa tanda kutip, tanpa penjelasan, dan jangan menambahkan kata-kata ekstra.
+Terjemahan:"""
+
+        import httpx
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                resp = client.post("http://localhost:11434/api/generate", json={
+                    "model": "qwen2.5:latest",
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.1
+                    }
+                })
+                if resp.status_code == 200:
+                    translated_text = resp.json().get("response", "").strip()
+                    return translated_text
+                else:
+                    logger.error(f"Ollama error: {resp.text}")
+                    return f"[Ollama Error: {resp.status_code}]"
+        except Exception as e:
+            logger.error(f"Ollama connection error: {e}")
+            return f"[Koneksi Ollama Gagal]"
 
     async def synthesize_async(self, text: str, voice: str = "id-ID-ArdiNeural") -> bytes:
         if not text:
